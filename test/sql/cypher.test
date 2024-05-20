@@ -1,0 +1,23 @@
+# name: test/sql/cypher.test
+# description: test cypher extension
+# group: [cypher]
+
+# Before we load the extension, this will fail
+statement error
+SELECT cypher('Sam');
+----
+Catalog Error: Scalar Function with name cypher does not exist!
+
+# Require statement will ensure this test is run with this extension loaded
+require cypher
+
+# Confirm the extension works
+query I
+SELECT cypher('Sam');
+----
+Cypher Sam 🐥
+
+query I
+SELECT cypher_openssl_version('Michael');
+----
+<REGEX>:Cypher Michael, my linked OpenSSL version is OpenSSL.*
