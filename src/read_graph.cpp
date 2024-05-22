@@ -110,7 +110,7 @@ namespace duckdb
         for (auto &ret : return_desc.variables)
         {
             return_types.push_back(LogicalType::VARCHAR); // TODO: Use the correct type
-            names.emplace_back(ret.second);
+            names.emplace_back(ret.first + "." + ret.second);
         }
 
         return std::move(bind_data);
