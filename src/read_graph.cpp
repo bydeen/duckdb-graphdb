@@ -17,7 +17,7 @@ namespace duckdb
 {
     struct GraphReadData : public TableFunctionData
     {
-        vector<vector<Value>> column_values;
+        vector<vector<string>> column_values;
     };
 
     struct GraphReadGlobalState : public GlobalTableFunctionState
@@ -32,17 +32,17 @@ namespace duckdb
         GraphReadLocalState() : row_index(0) {}
     };
 
-    void QueueToColumnValues(std::queue<std::queue<std::string>> &result, vector<vector<Value>> &column_values)
+    void QueueToColumnValues(std::queue<std::queue<std::string>> &result, vector<vector<string>> &column_values)
     {
         while (!result.empty())
         {
             auto inner_queue = result.front();
             result.pop();
 
-            vector<Value> row;
+            vector<string> row;
             while (!inner_queue.empty())
             {
-                row.push_back(Value(inner_queue.front()));
+                row.push_back(inner_queue.front());
                 inner_queue.pop();
             }
 
@@ -72,7 +72,8 @@ namespace duckdb
         {
             for (idx_t cidx = 0; cidx < col_count; cidx++)
             {
-                FlatVector::GetData<string_t>(output.data[cidx])[count] = column_values[lstate.row_index][cidx].ToString();
+                // FlatVector::GetData<string_t>(output.data[cidx])[count] = column_values[lstate.row_index][cidx].ToString();
+                FlatVector::GetData<string_t>(output.data[cidx])[count] = column_values[lstate.row_index][cidx];
             }
 
             lstate.row_index++;
@@ -90,22 +91,62 @@ namespace duckdb
 
     unique_ptr<FunctionData> ReadGraphBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types, vector<string> &names)
     {
+        string cypher_query = input.inputs[0].GetValue<std::string>();
+
+        size_t sql_pos = cypher_query.find("sql(");
+        size_t sql_end_pos = cypher_query.find(")", sql_pos);
+
+        if (sql_pos != string::npos && sql_end_pos != string::npos)
+        {
+            Connection conn(*(context.db));
+            const string sql_query = cypher_query.substr(sql_pos + 4, sql_end_pos - sql_pos - 4);
+            cout << "Extracted SQL query: " << sql_query << endl;
+
+            auto sql_result = conn.Query(sql_query);
+            // auto sql_result = context.Query(sql_query, false);
+            D_ASSERT(!sql_result->HasError());
+
+            string in_clause = "[";
+
+            while (true)
+            {
+                auto chunk = sql_result->Fetch();
+                if (!chunk || chunk->size() == 0)
+                {
+                    break;
+                }
+                for (idx_t row = 0; row < chunk->size(); row++)
+                {
+                    auto value = chunk->GetValue(0, row);
+                    in_clause += value.ToString();
+                    if (row < chunk->size() - 1)
+                    {
+                        in_clause += ", ";
+                    }
+                }
+            }
+            in_clause += "]";
+
+            cypher_query.replace(sql_pos, sql_end_pos - sql_pos + 1, in_clause);
+        }
+
+        cout << "Cypher query: " << cypher_query << endl;
+
         MatchDesc match_desc;
+        WhereDesc where_desc;
         ReturnDesc return_desc;
 
-        if (parser.ParseCypher(input.inputs[0].GetValue<std::string>(), match_desc, return_desc) != FEE_OK)
+        if (parser.ParseCypher(cypher_query, match_desc, where_desc, return_desc) != FEE_OK)
         {
             parser.DestroyJVM();
             throw Exception(ExceptionType::PARSER, "Parsing Cypher failed");
         }
-        if (trv.execute(match_desc, return_desc) != TRVE_OK)
-        {
-            trv.closeDBFiles();
-            throw Exception(ExceptionType::EXECUTOR, "Executing traverse failed");
-        }
+
+        int tid = TRV_AddTraversal(match_desc, where_desc, return_desc);
+        queue<queue<string>> results = TRV_GetResults(tid);
 
         unique_ptr<GraphReadData> bind_data = make_uniq<GraphReadData>();
-        QueueToColumnValues(trv.returnRes, bind_data->column_values);
+        QueueToColumnValues(results, bind_data->column_values);
 
         for (auto &ret : return_desc.variables)
         {

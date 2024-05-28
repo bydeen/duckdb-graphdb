@@ -9,23 +9,25 @@
 
 #include "cypher_extension.hpp"
 
+#include "minirel.h"
+#include "bf.h"
+#include "pf.h"
+#include "hf.h"
 #include "trv.h"
 #include "fe.h"
 
 Parser parser;
-Traverse trv;
 
 namespace duckdb
 {
     void CypherExtension::Load(DuckDB &db)
     {
         if (parser.InitJVM() != FEE_OK)
-        {
             throw Exception(ExceptionType::PARSER, "Initializing JVM failed");
-        }
 
-        if (trv.init() != TRVE_OK)
+        if (TRV_Init() != TRVE_OK)
         {
+            parser.DestroyJVM();
             throw Exception(ExceptionType::INTERNAL, "Initializing traverse layer failed");
         }
 
