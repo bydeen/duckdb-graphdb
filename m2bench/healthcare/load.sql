@@ -22,9 +22,9 @@ CREATE TABLE Prescription (
     enddate DATE
 );
 
-COPY Patient FROM '/home/dbs/Desktop/mxmdb/graphdb/benchmark/healthcare/table/Patient.csv' DELIMITER ',' CSV HEADER;
-COPY Diagnosis FROM '/home/dbs/Desktop/mxmdb/graphdb/benchmark/healthcare/table/Diagnosis.csv' DELIMITER ',' CSV HEADER;
-COPY Prescription FROM '/home/dbs/Desktop/mxmdb/graphdb/benchmark/healthcare/table/Prescription.csv' DELIMITER ',' CSV HEADER;
+COPY Patient FROM '/home/dbs/Desktop/m2bench/Datasets/healthcare/table/Patient.csv' DELIMITER ',' CSV HEADER;
+COPY Diagnosis FROM '/home/dbs/Desktop/m2bench/Datasets/healthcare/table/Diagnosis.csv' DELIMITER ',' CSV HEADER;
+COPY Prescription FROM '/home/dbs/Desktop/m2bench/Datasets/healthcare/table/Prescription.csv' DELIMITER ',' CSV HEADER;
 
 SELECT * FROM Patient LIMIT 5;
 SELECT * FROM Diagnosis LIMIT 5;
@@ -37,6 +37,6 @@ LOAD json;
 DROP TABLE IF EXISTS Drug;
 
 CREATE TABLE Drug AS
-    SELECT * FROM read_json_auto('/home/dbs/Desktop/mxmdb/graphdb/benchmark/healthcare/json/drug.json', format = 'newline_delimited');
+    SELECT * FROM read_json_auto('/home/dbs/Desktop/m2bench/Datasets/healthcare/json/drug.json', format = 'newline_delimited');
 
 SELECT * FROM Drug LIMIT 5;

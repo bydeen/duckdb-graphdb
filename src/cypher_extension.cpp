@@ -25,6 +25,17 @@ namespace duckdb
         if (parser.InitJVM() != FEE_OK)
             throw Exception(ExceptionType::PARSER, "Initializing JVM failed");
 
+        // dummy execution to initialize the parser
+        MatchDesc match_desc;
+        WhereDesc where_desc;
+        ReturnDesc return_desc;
+
+        if (parser.ParseCypher("MATCH ()-[]-()", match_desc, where_desc, return_desc) != FEE_OK)
+        {
+            parser.DestroyJVM();
+            throw Exception(ExceptionType::PARSER, "Parsing Cypher failed");
+        }
+
         if (TRV_Init() != TRVE_OK)
         {
             parser.DestroyJVM();

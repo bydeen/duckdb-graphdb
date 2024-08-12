@@ -1,42 +1,28 @@
+SET threads TO 1;
+SET memory_limit = '20GB';
+
+DROP TABLE IF EXISTS A;
+DROP TABLE IF EXISTS B;
+DROP TABLE IF EXISTS C;
+
 .timer on
 
-CREATE TEMPORARY TABLE A AS (
+CREATE TABLE A AS (
 	SELECT disease_id
 	FROM diagnosis
 	WHERE patient_id = 9
 );
 -- SELECT * FROM A;
 
-CREATE TEMPORARY TABLE B (disease_id VARCHAR UNIQUE);
+CREATE TABLE B AS (
+	SELECT DISTINCT("d3.disease_id")::TEXT::BIGINT AS disease_id
+	FROM cypher(
+		'MATCH (d1:disease)-[:is_a]->(d2:disease)<-[:is_a]-(d3:disease)-[:is_a]->(d4:disease) WHERE d1.disease_id IN sql(SELECT disease_id FROM A)
+		RETURN d3.disease_id'
+	) 
+);
 
-INSERT INTO B SELECT DISTINCT "d3.disease_id" FROM cypher (
-    'MATCH (d1:disease {disease_id:59621000})-[:is_a]->(d2:disease)<-[:is_a]-(d3:disease) RETURN d3.disease_id'
-) WHERE NOT EXISTS (
-    SELECT 1 FROM B WHERE disease_id = "d3.disease_id"
-);
-INSERT INTO B SELECT DISTINCT "d3.disease_id" FROM cypher (
-    'MATCH (d1:disease {disease_id:42343007})-[:is_a]->(d2:disease)<-[:is_a]-(d3:disease) RETURN d3.disease_id'
-) WHERE NOT EXISTS (
-    SELECT 1 FROM B WHERE disease_id = "d3.disease_id"
-);
-INSERT INTO B SELECT DISTINCT "d3.disease_id" FROM cypher (
-    'MATCH (d1:disease {disease_id:274100004})-[:is_a]->(d2:disease)<-[:is_a]-(d3:disease) RETURN d3.disease_id'
-) WHERE NOT EXISTS (
-    SELECT 1 FROM B WHERE disease_id = "d3.disease_id"
-);
-INSERT INTO B SELECT DISTINCT "d3.disease_id" FROM cypher (
-    'MATCH (d1:disease {disease_id:14669001})-[:is_a]->(d2:disease)<-[:is_a]-(d3:disease) RETURN d3.disease_id'
-) WHERE NOT EXISTS (
-    SELECT 1 FROM B WHERE disease_id = "d3.disease_id"
-);
-INSERT INTO B SELECT DISTINCT "d3.disease_id" FROM cypher (
-    'MATCH (d1:disease {disease_id:816082000})-[:is_a]->(d2:disease)<-[:is_a]-(d3:disease) RETURN d3.disease_id'
-) WHERE NOT EXISTS (
-    SELECT 1 FROM B WHERE disease_id = "d3.disease_id"
-);
--- SELECT * FROM B;
-
-CREATE TEMPORARY TABLE C AS (
+CREATE TABLE C AS (
 	SELECT DISTINCT(patient_id) AS patient_id
 	FROM diagnosis, B
 	WHERE diagnosis.disease_id = B.disease_id

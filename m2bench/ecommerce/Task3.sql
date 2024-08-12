@@ -1,8 +1,9 @@
+SET threads TO 1;
+SET memory_limit = '20GB';
+
 DROP TABLE IF EXISTS A;
 DROP TABLE IF EXISTS B;
-
-INSTALL json;
-LOAD json;
+DROP TABLE IF EXISTS C;
 
 .timer on
 
@@ -21,23 +22,17 @@ CREATE TABLE A AS (
                 ) AS cid
         )
 );
+-- SELECT * FROM A;
 
-CREATE TEMPORARY TABLE B AS (
+CREATE TABLE B AS (
     SELECT "p1.person_id" AS person_id
     FROM cypher (
-        'MATCH (p2:Person)<-[:follows*2]-(p1:Person) WHERE p2.person_id IN sql(SELECT person_id FROM A) RETURN p1.person_id'
+        'MATCH (p2:Person)<-[r:Follows*2]-(p1:Person) WHERE p2.person_id IN sql(SELECT person_id FROM A) RETURN p1.person_id'
     )
 );
+SELECT COUNT(*) FROM B;
 
-CREATE TEMPORARY TABLE btemp AS (
-    SELECT *
-    FROM cypher (
-        'MATCH (p1:Person)-[:follows]->(p2:Person) RETURN p1.person_id'
-    )
-);
-SELECT COUNT(*) FROM btemp;
-
-CREATE TEMPORARY TABLE C AS (
+CREATE TABLE C AS (
         SELECT temp.customer_id AS cid,
                Product.product_id AS pid,
                Product.brand_id AS brand_id
@@ -50,6 +45,7 @@ CREATE TEMPORARY TABLE C AS (
         Product
         WHERE Product.product_id = temp.product_id::CHARACTER(11)
 );
+-- SELECT * FROM C LIMIT 5;
 
 SELECT Brand.industry, COUNT(*) AS customer_count
 FROM C, Brand

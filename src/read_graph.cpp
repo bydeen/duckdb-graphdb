@@ -13,6 +13,8 @@
 #include "trv.h"
 #include "fe.h"
 
+bool isSkipped = false; // to prevent double call of bind function
+
 namespace duckdb
 {
     struct GraphReadData : public TableFunctionData
@@ -32,7 +34,7 @@ namespace duckdb
         GraphReadLocalState() : row_index(0) {}
     };
 
-    void QueueToColumnValues(std::queue<std::queue<std::string>> &result, vector<vector<string>> &column_values)
+    void QueueToColumnValues(queue<queue<string>> &result, vector<vector<string>> &column_values)
     {
         while (!result.empty())
         {
@@ -72,7 +74,6 @@ namespace duckdb
         {
             for (idx_t cidx = 0; cidx < col_count; cidx++)
             {
-                // FlatVector::GetData<string_t>(output.data[cidx])[count] = column_values[lstate.row_index][cidx].ToString();
                 FlatVector::GetData<string_t>(output.data[cidx])[count] = column_values[lstate.row_index][cidx];
             }
 
@@ -91,7 +92,7 @@ namespace duckdb
 
     unique_ptr<FunctionData> ReadGraphBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types, vector<string> &names)
     {
-        string cypher_query = input.inputs[0].GetValue<std::string>();
+        string cypher_query = input.inputs[0].GetValue<string>();
 
         size_t sql_pos = cypher_query.find("sql(");
         size_t sql_end_pos = cypher_query.find(")", sql_pos);
@@ -100,10 +101,8 @@ namespace duckdb
         {
             Connection conn(*(context.db));
             const string sql_query = cypher_query.substr(sql_pos + 4, sql_end_pos - sql_pos - 4);
-            cout << "Extracted SQL query: " << sql_query << endl;
 
             auto sql_result = conn.Query(sql_query);
-            // auto sql_result = context.Query(sql_query, false);
             D_ASSERT(!sql_result->HasError());
 
             string in_clause = "[";
@@ -129,8 +128,10 @@ namespace duckdb
 
             cypher_query.replace(sql_pos, sql_end_pos - sql_pos + 1, in_clause);
         }
-
-        cout << "Cypher query: " << cypher_query << endl;
+        else
+        {
+            isSkipped = true;
+        }
 
         MatchDesc match_desc;
         WhereDesc where_desc;
@@ -142,19 +143,30 @@ namespace duckdb
             throw Exception(ExceptionType::PARSER, "Parsing Cypher failed");
         }
 
+        for (auto &ret : return_desc.variables)
+        {
+            return_types.push_back(LogicalType::VARCHAR);
+            names.emplace_back(ret.first + "." + ret.second);
+        }
+
+        if (!isSkipped)
+        {
+            // return dummy data to prevent double call of bind function
+            unique_ptr<GraphReadData> bind_data = make_uniq<GraphReadData>();
+            bind_data->column_values.push_back({"d"});
+
+            isSkipped = true;
+
+            return move(bind_data);
+        }
+
         int tid = TRV_AddTraversal(match_desc, where_desc, return_desc);
         queue<queue<string>> results = TRV_GetResults(tid);
 
         unique_ptr<GraphReadData> bind_data = make_uniq<GraphReadData>();
         QueueToColumnValues(results, bind_data->column_values);
 
-        for (auto &ret : return_desc.variables)
-        {
-            return_types.push_back(LogicalType::VARCHAR); // TODO: Use the correct type
-            names.emplace_back(ret.first + "." + ret.second);
-        }
-
-        return std::move(bind_data);
+        return move(bind_data);
     }
 
     unique_ptr<GlobalTableFunctionState> ReadGraphGlobalStateInit(ClientContext &context, TableFunctionInitInput &input)
